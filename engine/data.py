@@ -65,7 +65,7 @@ def safe_download(*args, **kwargs):
     raise Exception("Rate limit hit. Try again later.")
 
 
-@st.cache_data(ttl=600)  # cache for 10 minutes
+@st.cache_data(ttl=1800)  # cache for 10 minutes
 def fetch_data(symbol, period="6mo"):
     symbol = normalize_symbol(symbol)
 
