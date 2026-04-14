@@ -81,11 +81,14 @@ def fetch_data(symbol, period="1y"):
     if data.empty:
         raise ValueError("No data returned")
 
-    try:
-        stock = data[symbol]
-        nifty = data["^NSEI"]
-    except KeyError:
-        raise ValueError("Invalid symbol or data not available")
+if symbol not in data.columns.get_level_values(0):
+    raise ValueError(f"{symbol} not found in Yahoo data")
+
+if "^NSEI" not in data.columns.get_level_values(0):
+    raise ValueError("NIFTY data missing")
+
+stock = data[symbol].copy()
+nifty = data["^NSEI"].copy()
 
     stock = _flatten_columns(stock)
     nifty = _flatten_columns(nifty)
