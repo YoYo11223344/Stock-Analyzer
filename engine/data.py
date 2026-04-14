@@ -56,17 +56,17 @@ def _flatten_columns(df):
 
 
 def safe_download(*args, **kwargs):
-    """Retry logic to handle rate limits"""
-    for attempt in range(3):
+    for attempt in range(5):
         try:
             return yf.download(*args, **kwargs)
         except YFRateLimitError:
-            time.sleep(2)  # wait before retry
+            wait = 2 ** attempt  # exponential backoff
+            time.sleep(wait)
     raise Exception("Rate limit hit. Try again later.")
 
 
 @st.cache_data(ttl=600)  # cache for 10 minutes
-def fetch_data(symbol, period="1y"):
+def fetch_data(symbol, period="6mo"):
     symbol = normalize_symbol(symbol)
 
     # ✅ Single batched request instead of two
