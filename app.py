@@ -173,8 +173,10 @@ with st.form("analyze_form"):
 if submit:
     symbols = [s.strip() for s in symbol_input.split(",")]
 
+    import time
+
     for sym in symbols:
-        try:
+            time.sleep(1)  # prevent hammering Yahoo
             result = analyze_stock(sym)  # ✅ ONLY DATA SOURCE
             confidence = result["confidence"]
 
