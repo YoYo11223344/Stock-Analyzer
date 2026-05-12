@@ -176,9 +176,11 @@ if submit:
     import time
 
     for sym in symbols:
-            time.sleep(1)  # prevent hammering Yahoo
-            result = analyze_stock(sym)  # ✅ ONLY DATA SOURCE
-            confidence = result["confidence"]
+    try:
+        time.sleep(1)  # prevent hammering Yahoo
+
+        result = analyze_stock(sym)  # ✅ ONLY DATA SOURCE
+        confidence = result["confidence"]
 
             tab1, tab2, tab3 = st.tabs(["📊 Overview", "📈 Chart", "📘 Details"])
 
@@ -246,5 +248,5 @@ if submit:
                 st.markdown("---")
                 st.info("ℹ️ Signal validity: ~20 trading days. This is not financial advice.")
 
-        except Exception as e:
+    except Exception as e:
             st.error(f"Error analyzing {sym}: {e}")
