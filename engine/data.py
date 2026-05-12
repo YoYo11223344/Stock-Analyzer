@@ -23,7 +23,6 @@ def safe_download(symbol, period="2y"):
                 threads=False
             )
 
-            # IMPORTANT: validate structure immediately
             if df is not None and isinstance(df, pd.DataFrame) and not df.empty:
                 return df
 
@@ -33,17 +32,47 @@ def safe_download(symbol, period="2y"):
     return pd.DataFrame()
 
 
-def validate_ohlc(df, symbol_name):
-    required = ["Open", "High", "Low", "Close"]
+def normalize_dataframe(df, symbol):
+    """
+    Forces OHLC format even if Yahoo returns weird structure
+    """
 
     if df is None or df.empty:
-        raise ValueError(f"No data returned for {symbol_name}")
+        raise ValueError(f"No data returned for {symbol}")
 
-    missing = [col for col in required if col not in df.columns]
+    # If MultiIndex columns exist → flatten
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Sometimes Yahoo returns lowercase or weird casing
+    rename_map = {}
+    for col in df.columns:
+        if col.lower() == "open":
+            rename_map[col] = "Open"
+        elif col.lower() == "high":
+            rename_map[col] = "High"
+        elif col.lower() == "low":
+            rename_map[col] = "Low"
+        elif col.lower() == "close":
+            rename_map[col] = "Close"
+        elif col.lower() == "volume":
+            rename_map[col] = "Volume"
+
+    df = df.rename(columns=rename_map)
+
+    return df
+
+
+def validate(df, symbol):
+    required = ["Open", "High", "Low", "Close"]
+
+    missing = [c for c in required if c not in df.columns]
 
     if missing:
         raise ValueError(
-            f"{symbol_name} missing columns: {missing}. "
+            f"{symbol} missing columns {missing}. "
             f"Available columns: {list(df.columns)}"
         )
 
@@ -57,22 +86,18 @@ def fetch_data(symbol, period="2y"):
     stock = safe_download(symbol, period)
     nifty = safe_download("^NSEI", period)
 
-    # =========================
-    # VALIDATION
-    # =========================
-    validate_ohlc(stock, symbol)
-    validate_ohlc(nifty, "^NSEI")
+    stock = normalize_dataframe(stock, symbol)
+    nifty = normalize_dataframe(nifty, "^NSEI")
 
-    # =========================
-    # CLEANING
-    # =========================
+    validate(stock, symbol)
+    validate(nifty, "^NSEI")
+
     stock = stock.dropna().sort_index()
     nifty = nifty.dropna().sort_index()
 
     if len(stock) < 60:
         raise ValueError(
-            f"Not enough data for {symbol}: {len(stock)} rows. "
-            "Try again later or increase period."
+            f"Not enough data for {symbol}: {len(stock)} rows"
         )
 
     return stock, nifty
