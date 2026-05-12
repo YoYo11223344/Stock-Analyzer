@@ -24,16 +24,16 @@ def safe_download(*args, **kwargs):
         try:
             return yf.download(*args, **kwargs)
         except YFRateLimitError:
-            wait = 2 ** attempt  # exponential backoff
+            wait = 2 ** attempt
             time.sleep(wait)
     raise Exception("Rate limit hit. Try again later.")
 
 
-@st.cache_data(ttl=1800)  # cache for 10 minutes
+@st.cache_data(ttl=1800)
 def fetch_data(symbol, period="6mo"):
     symbol = normalize_symbol(symbol)
 
-    # ✅ Single batched request instead of two
+    # Download stock + NIFTY together
     data = safe_download(
         [symbol, "^NSEI"],
         period=period,
@@ -42,25 +42,39 @@ def fetch_data(symbol, period="6mo"):
         progress=False
     )
 
-    if data.empty:
-        raise ValueError("No data returned")
+    if data is None or data.empty:
+        raise ValueError("No data returned from Yahoo Finance")
 
-if symbol not in data.columns.get_level_values(0):
-    raise ValueError(f"{symbol} not found in Yahoo data")
+    # Validate structure
+    if not isinstance(data.columns, pd.MultiIndex):
+        raise ValueError("Unexpected data format from Yahoo Finance")
 
-if "^NSEI" not in data.columns.get_level_values(0):
-    raise ValueError("NIFTY data missing")
+    tickers = data.columns.get_level_values(0)
 
-stock = data[symbol].copy()
-nifty = data["^NSEI"].copy()
+    if symbol not in tickers:
+        raise ValueError(f"{symbol} not found in Yahoo data")
 
+    if "^NSEI" not in tickers:
+        raise ValueError("NIFTY (^NSEI) data missing")
+
+    # Split data
+    stock = data[symbol].copy()
+    nifty = data["^NSEI"].copy()
+
+    # Flatten columns
     stock = _flatten_columns(stock)
     nifty = _flatten_columns(nifty)
 
+    # Clean
     stock.dropna(inplace=True)
     nifty.dropna(inplace=True)
 
+    required_cols = ["Open", "High", "Low", "Close", "Volume"]
+    for col in required_cols:
+        if col not in stock.columns:
+            raise ValueError(f"Missing column in stock data: {col}")
+
     if stock.empty:
-        raise ValueError("No stock data found")
+        raise ValueError("Stock data is empty after cleaning")
 
     return stock, nifty
