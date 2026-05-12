@@ -246,5 +246,5 @@ if submit:
                 st.markdown("---")
                 st.info("ℹ️ Signal validity: ~20 trading days. This is not financial advice.")
 
-        # except Exception as e:
-        #     st.error(f"Error analyzing {sym}: {e}")
+        except Exception as e:
+            st.error(f"Error analyzing {sym}: {e}")
