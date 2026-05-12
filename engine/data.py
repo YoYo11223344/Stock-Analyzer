@@ -14,18 +14,40 @@ def normalize_symbol(symbol):
 def safe_download(symbol, period="2y"):
     for attempt in range(5):
         try:
-            data = yf.download(
+            df = yf.download(
                 symbol,
                 period=period,
                 interval="1d",
-                progress=False
+                progress=False,
+                auto_adjust=False,
+                threads=False
             )
-            if data is not None and not data.empty:
-                return data
+
+            # IMPORTANT: validate structure immediately
+            if df is not None and isinstance(df, pd.DataFrame) and not df.empty:
+                return df
+
         except Exception:
             time.sleep(2 ** attempt)
 
     return pd.DataFrame()
+
+
+def validate_ohlc(df, symbol_name):
+    required = ["Open", "High", "Low", "Close"]
+
+    if df is None or df.empty:
+        raise ValueError(f"No data returned for {symbol_name}")
+
+    missing = [col for col in required if col not in df.columns]
+
+    if missing:
+        raise ValueError(
+            f"{symbol_name} missing columns: {missing}. "
+            f"Available columns: {list(df.columns)}"
+        )
+
+    return True
 
 
 @st.cache_data(ttl=1800)
@@ -38,29 +60,15 @@ def fetch_data(symbol, period="2y"):
     # =========================
     # VALIDATION
     # =========================
-    if stock.empty:
-        raise ValueError(f"No stock data found for {symbol}. Yahoo may be blocking or symbol invalid.")
-
-    if nifty.empty:
-        raise ValueError("No NIFTY data found (^NSEI)")
+    validate_ohlc(stock, symbol)
+    validate_ohlc(nifty, "^NSEI")
 
     # =========================
     # CLEANING
     # =========================
-    stock = stock.dropna()
-    nifty = nifty.dropna()
+    stock = stock.dropna().sort_index()
+    nifty = nifty.dropna().sort_index()
 
-    stock = stock.sort_index()
-    nifty = nifty.sort_index()
-
-    required_cols = ["Open", "High", "Low", "Close", "Volume"]
-    for col in required_cols:
-        if col not in stock.columns:
-            raise ValueError(f"Missing column in stock data: {col}")
-
-    # =========================
-    # FINAL SAFETY CHECK
-    # =========================
     if len(stock) < 60:
         raise ValueError(
             f"Not enough data for {symbol}: {len(stock)} rows. "
