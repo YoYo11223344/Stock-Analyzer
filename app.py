@@ -114,6 +114,7 @@ import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 from engine.engine import analyze_stock
 from engine.indicators import compute_features
+import time
 
 
 # ✅ Cache chart data separately (NO extra API calls)
@@ -152,6 +153,7 @@ def generate_explanations(features):
         explanations.append("❌ MACD does not confirm bullish momentum.")
 
     volatility = features["ATR"] / features["Close"]
+
     if volatility > 0.04:
         explanations.append("⚠️ High volatility detected, risk is elevated.")
     else:
@@ -160,93 +162,192 @@ def generate_explanations(features):
     return explanations
 
 
+# ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="📈 Stock Analyzer", layout="wide")
 st.title("📈 Advanced Stock Analyzer")
 
 
-# ✅ USE FORM (prevents rerun spam)
+# ---------------- FORM ----------------
 with st.form("analyze_form"):
-    symbol_input = st.text_input("Stock Symbol (comma-separated allowed)", "TCS")
+    symbol_input = st.text_input(
+        "Stock Symbol (comma-separated allowed)",
+        "TCS"
+    )
+
     submit = st.form_submit_button("Analyze")
 
 
+# ---------------- MAIN LOGIC ----------------
 if submit:
+
     symbols = [s.strip() for s in symbol_input.split(",")]
 
-    import time
-
     for sym in symbols:
-    try:
-        time.sleep(1)  # prevent hammering Yahoo
 
-        result = analyze_stock(sym)  # ✅ ONLY DATA SOURCE
-        confidence = result["confidence"]
+        try:
+            # Prevent hammering Yahoo Finance
+            time.sleep(1)
 
-            tab1, tab2, tab3 = st.tabs(["📊 Overview", "📈 Chart", "📘 Details"])
+            # Analyze stock
+            result = analyze_stock(sym)
 
-            # ------------------ TAB 1 ------------------
+            confidence = result["confidence"]
+
+            st.header(f"📌 {sym}")
+
+            tab1, tab2, tab3 = st.tabs(
+                ["📊 Overview", "📈 Chart", "📘 Details"]
+            )
+
+            # =====================================================
+            # TAB 1 - OVERVIEW
+            # =====================================================
             with tab1:
-                fig = go.Figure(go.Indicator(
-                    mode="gauge+number",
-                    value=confidence * 100,
-                    gauge={
-                        "axis": {"range": [0, 100]},
-                        "bar": {"color": "green" if result["signal"] == "BUY" else "red"}
-                    }
-                ))
-                st.plotly_chart(fig)
+
+                fig = go.Figure(
+                    go.Indicator(
+                        mode="gauge+number",
+                        value=confidence * 100,
+                        gauge={
+                            "axis": {"range": [0, 100]},
+                            "bar": {
+                                "color": (
+                                    "green"
+                                    if result["signal"] == "BUY"
+                                    else "red"
+                                )
+                            }
+                        }
+                    )
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
 
                 if result["signal"] == "BUY":
+
                     st.markdown(
-                        f"<h2 style='color:#2ecc71;'>🚀 BUY ({confidence*100:.0f}%)</h2>",
+                        f"""
+                        <h2 style='color:#2ecc71;'>
+                        🚀 BUY ({confidence*100:.0f}%)
+                        </h2>
+                        """,
                         unsafe_allow_html=True
                     )
+
                 else:
+
                     st.markdown(
-                        f"<h2 style='color:#e74c3c;'>⛔ NO BUY ({confidence*100:.0f}%)</h2>",
+                        f"""
+                        <h2 style='color:#e74c3c;'>
+                        ⛔ NO BUY ({confidence*100:.0f}%)
+                        </h2>
+                        """,
                         unsafe_allow_html=True
                     )
 
                 for r in result["reasons"]:
-                    color = "#2ecc71" if result["signal"] == "BUY" else "#e74c3c"
-                    st.markdown(f"<span style='color:{color}'>• {r}</span>", unsafe_allow_html=True)
 
-            # ------------------ TAB 2 ------------------
+                    color = (
+                        "#2ecc71"
+                        if result["signal"] == "BUY"
+                        else "#e74c3c"
+                    )
+
+                    st.markdown(
+                        f"<span style='color:{color}'>• {r}</span>",
+                        unsafe_allow_html=True
+                    )
+
+            # =====================================================
+            # TAB 2 - CHART
+            # =====================================================
             with tab2:
-                # ✅ NO fetch_data here anymore
-                features_df = compute_features(result["features"].to_frame().T)
+
+                # Compute features
+                features_df = compute_features(
+                    result["features"].to_frame().T
+                )
+
                 chart_data = prepare_chart_data(features_df)
 
-                fig = make_subplots(rows=2, cols=1, shared_xaxes=True)
+                fig = make_subplots(
+                    rows=2,
+                    cols=1,
+                    shared_xaxes=True
+                )
 
-                fig.add_trace(go.Scatter(
-                    x=chart_data.index, y=chart_data["Close"], name="Close"
-                ), row=1, col=1)
+                # Close Price
+                fig.add_trace(
+                    go.Scatter(
+                        x=chart_data.index,
+                        y=chart_data["Close"],
+                        name="Close"
+                    ),
+                    row=1,
+                    col=1
+                )
 
-                fig.add_trace(go.Scatter(
-                    x=chart_data.index, y=chart_data["EMA20"], name="EMA20"
-                ), row=1, col=1)
+                # EMA20
+                fig.add_trace(
+                    go.Scatter(
+                        x=chart_data.index,
+                        y=chart_data["EMA20"],
+                        name="EMA20"
+                    ),
+                    row=1,
+                    col=1
+                )
 
-                fig.add_trace(go.Scatter(
-                    x=chart_data.index, y=chart_data["EMA50"], name="EMA50"
-                ), row=1, col=1)
+                # EMA50
+                fig.add_trace(
+                    go.Scatter(
+                        x=chart_data.index,
+                        y=chart_data["EMA50"],
+                        name="EMA50"
+                    ),
+                    row=1,
+                    col=1
+                )
 
-                fig.add_trace(go.Scatter(
-                    x=chart_data.index, y=chart_data["RSI"], name="RSI"
-                ), row=2, col=1)
+                # RSI
+                fig.add_trace(
+                    go.Scatter(
+                        x=chart_data.index,
+                        y=chart_data["RSI"],
+                        name="RSI"
+                    ),
+                    row=2,
+                    col=1
+                )
 
-                st.plotly_chart(fig, use_container_width=True)
+                fig.update_layout(height=700)
 
-            # ------------------ TAB 3 ------------------
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True
+                )
+
+            # =====================================================
+            # TAB 3 - DETAILS
+            # =====================================================
             with tab3:
+
                 st.subheader("📘 Beginner-Friendly Explanation")
 
-                explanations = generate_explanations(result["features"])
+                explanations = generate_explanations(
+                    result["features"]
+                )
+
                 for exp in explanations:
                     st.markdown(f"- {exp}")
 
                 st.markdown("---")
-                st.info("ℹ️ Signal validity: ~20 trading days. This is not financial advice.")
 
-    except Exception as e:
-            st.error(f"Error analyzing {sym}: {e}")
+                st.info(
+                    "ℹ️ Signal validity: ~20 trading days. "
+                    "This is not financial advice."
+                )
+
+        except Exception as e:
+
+            st.error(f"❌ Error analyzing {sym}: {e}")
